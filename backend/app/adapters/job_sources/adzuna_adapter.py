@@ -114,3 +114,7 @@ class AdzunaAdapter(JobSourcePort):
         except (ValueError, AttributeError):
             logger.warning("date_parse_failed", date_str=date_str)
             return None
+
+
+def create_adzuna_adapter(app_id: str, api_key: str, country: str = "us") -> AdzunaAdapter:
+    return AdzunaAdapter(app_id=app_id, api_key=api_key, country=country)
