@@ -34,5 +34,8 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # AWS
+    AWS_REGION: str = "ca-central-1"
 
-settings = Settings()
+
+settings = Settings()  # type: ignore[call-arg]
