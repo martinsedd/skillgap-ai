@@ -1,0 +1,89 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - "github/workflows/backend-test.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - "github/workflows/backend-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: skillgap
+          POSTGRES_PASSWORD: skillgap
+          POSTGRES_DB: skillgap_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: uv sync --dev
+
+      - name: Run linting
+        working-directory: ./backend
+        run: uv run ruff check .
+
+      - name: Run tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://skillgap:skillgap@localhost:5432/skillgap_test
+          PINECONE_API_KEY: test-key
+          PINECONE_INDEX_NAME: test-index
+          PINECONE_ENVIRONMENT: test-env
+          ADZUNA_APP_ID: test-id
+          ADZUNA_API_KEY: test-key
+          REMOTEOK_API_URL: http://test.com
+          LLM_ENDPOINT: http://localhost:8000
+          EMBEDDING_MODEL: sentence-transformers/all-mpnet-base-v2
+          AUTH_STUB_USER_ID: default-user
+          JOB_REFRESH_CRON: :"0 2 * * *"
+          STORAGE_BUCKET: test-bucket
+          STORAGE_PROVIDER: s3
+          LOG_LEVEL: INFO
+        run: uv run pytest -v --tb=short
+
+      - name: Run tests with coverage
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://skillgap:skillgap@localhost:5432/skillgap_test
+          PINECONE_API_KEY: test-key
+          PINECONE_INDEX_NAME: test-index
+          PINECONE_ENVIRONMENT: test-env
+          ADZUNA_APP_ID: test-id
+          ADZUNA_API_KEY: test-key
+          REMOTEOK_API_URL: http://test.com
+          LLM_ENDPOINT: http://localhost:8000
+          EMBEDDING_MODEL: sentence-transformers/all-mpnet-base-v2
+          AUTH_STUB_USER_ID: default-user
+          JOB_REFRESH_CRON: "0 2 * * *"
+          STORAGE_BUCKET: test-bucket
+          STORAGE_PROVIDER: s3
+          LOG_LEVEL: INFO
+        run: uv run pytest --cov=app --cov-report=term-missing

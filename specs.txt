@@ -1,0 +1,526 @@
+SkillGap - Technical Specification
+================================================================================
+
+PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+AI-powered job search assistant helping tech candidates identify skill gaps and
+prepare for interviews through semantic matching and mock interview sessions.
+
+ARCHITECTURE STYLE
+--------------------------------------------------------------------------------
+- Pattern: Domain-Driven Design + Hexagonal Architecture (Pythonic variant)
+- Deployment: Single-user MVP
+- Layers: Domain (pure logic) → Adapters (infrastructure) → API (presentation)
+
+TECH STACK
+--------------------------------------------------------------------------------
+
+Backend:
+- Framework: FastAPI
+- ORM: SQLAlchemy
+- Database: PostgreSQL
+- Migrations: Alembic
+- Async Tasks: APScheduler (in-process, daily job refresh)
+- Logging: structlog (JSON output)
+
+AI/ML:
+- LLM: Mistral-7B-Instruct-v0.3 (Q5_K_M quantization)
+- LLM Runtime: llama.cpp via llama-cpp-python
+- LLM Location: Local machine (Tailscale tunnel to cloud API)
+- Embeddings: sentence-transformers/all-mpnet-base-v2 (768d)
+- Vector DB: Pinecone (free tier, single index)
+- Agent Framework: LangGraph (interview orchestration)
+
+Data Sources:
+- Job APIs: Adzuna + RemoteOK
+- Deduplication: Hash-based (SHA256 of title|company|location, lowercase)
+- Refresh Strategy: APScheduler daily refresh
+
+Frontend:
+- Framework: React 18
+- Styling: Tailwind CSS + shadcn/ui
+- Routing: React Router
+- State Management: @tanstack/react-query
+- Build: Vite
+
+DevOps:
+- Containerization: Docker + docker-compose (local dev)
+- IaC: Terraform
+- Cloud: AWS/Azure/GCP free tier (1GB instance: API + Postgres)
+- CI/CD: GitHub Actions
+- Tunneling: Tailscale (cloud ↔ local LLM service)
+
+Testing:
+- Framework: pytest (unit + integration + e2e)
+- API Testing: .http files (manual endpoint testing)
+- Coverage: Domain layer 100%, adapters >80%
+
+DEPLOYMENT ARCHITECTURE
+--------------------------------------------------------------------------------
+
+Cloud (Free Tier):
+- Compute: t2.micro / B1S / e2-micro (1 vCPU, 1GB RAM)
+  - FastAPI application
+  - PostgreSQL (same instance)
+  - Tailscale client
+- Storage: S3 / Azure Blob / GCS (resume PDFs, 5GB free)
+- Vector DB: Pinecone (managed, cloud service)
+
+Local (Development Machine):
+- LLM Service: FastAPI wrapper around llama.cpp
+  - Exposes /generate endpoint
+  - Accessible via Tailscale private network
+  - Model: Mistral-7B-Instruct-v0.3 Q5_K_M (~5GB RAM)
+  - Hardware: AMD Ryzen 9 6900HS (16 cores @ 4.93GHz, 8GB VRAM, 10GB RAM)
+
+DATA MODELS
+--------------------------------------------------------------------------------
+
+User:
+- ID (UUID, primary key)
+- created_at (timestamp)
+- Note: Single-user system, one seeded row
+
+Resume:
+- ID (UUID)
+- user_id (FK → User)
+- file_path (S3/blob URL)
+- extracted_text (text)
+- pinecone_id (string, references vector)
+- uploaded_at (timestamp)
+- Constraint: One resume per user (upsert on upload)
+
+Job:
+- ID (UUID)
+- external_id (string, from API)
+- source (enum: adzuna, remoteok)
+- dedup_hash (string, indexed, unique)
+- title (string)
+- company (string)
+- description (text)
+- url (string)
+- location (string, nullable)
+- salary (string, nullable)
+- posted_at (timestamp, nullable)
+- fetched_at (timestamp)
+- pinecone_id (string)
+- extracted_skills (JSONB, nullable)
+  - required: [string]
+  - nice_to_have: [string]
+  - tech_stack: [string]
+  - seniority_level: string
+
+InterviewSession:
+- ID (UUID)
+- user_id (FK → User)
+- job_id (FK → Job)
+- state (enum: draft, in_progress, completed, abandoned)
+- conversation_history (JSONB, LangGraph state)
+- overall_score (float, nullable)
+- feedback (text, nullable)
+- created_at (timestamp)
+- completed_at (timestamp, nullable)
+
+DOMAIN STRUCTURE
+--------------------------------------------------------------------------------
+
+Domain Models (Pure Python):
+- Resume: text, skills[], matches_job(job) -> float
+- Job: title, company, description, required_skills[]
+- Interview: questions[], answers[], score
+
+Domain Services:
+- JobMatchingService: rank_jobs(resume, jobs[]) -> scored_jobs[]
+- GapAnalysisService: analyze_gap(resume, job) -> gap_report
+- InterviewService: generate_questions(job, resume) -> questions[]
+
+Ports (ABCs):
+- LLMPort: generate_gap_analysis(), generate_interview_question(), evaluate_answer()
+- VectorDBPort: upsert_embedding(), search_similar()
+- JobSourcePort: fetch_jobs(query) -> jobs[]
+- AuthPort: validate_token() -> user_id
+- ResumeRepository: save(), find_by_user()
+- JobRepository: save(), find_by_id(), bulk_upsert()
+
+Adapters:
+- LocalLLMAdapter (LLMPort): Calls Tailscale-tunneled llama.cpp service
+- PineconeAdapter (VectorDBPort): Pinecone client wrapper
+- AdzunaAdapter (JobSourcePort): REST API client
+- RemoteOKAdapter (JobSourcePort): REST API client
+- StubAuthAdapter (AuthPort): Returns hardcoded "default-user" ID
+- SQLAlchemyResumeRepository: ORM ↔ domain model mapping
+- SQLAlchemyJobRepository: Handles dedup via dedup_hash
+
+AUTHENTICATION
+--------------------------------------------------------------------------------
+Strategy: Port/adapter pattern with stub implementation
+
+v1 (Stub):
+- All requests accept Authorization: Bearer <any-token>
+- StubAuthAdapter returns hardcoded user_id: "default-user"
+- No validation, no JWT parsing
+
+Future (Real Auth):
+- Swap StubAuthAdapter for JWTAuthAdapter
+- No changes to domain/API layer (dependency injection swaps adapter)
+
+API ENDPOINTS
+--------------------------------------------------------------------------------
+
+Resume:
+POST   /api/resume/upload          # Upload PDF, extract text, embed, store
+GET    /api/resume                 # Get current user's resume
+
+Jobs:
+POST   /api/jobs/search            # Semantic search: resume → ranked jobs
+GET    /api/jobs/{id}              # Job detail + gap analysis
+GET    /api/jobs/{id}/skills       # Extracted skills breakdown
+POST   /api/jobs/refresh           # Manual trigger: fetch new jobs from APIs
+
+Interview:
+POST   /api/interview/start        # Create session, generate first question
+POST   /api/interview/{id}/answer  # Submit answer, get next question
+GET    /api/interview/{id}/feedback # Get final score + feedback + resources
+GET    /api/interview/{id}         # Get session state
+
+VECTOR DB STRATEGY
+--------------------------------------------------------------------------------
+
+Pinecone Configuration:
+- Index: Single index (free tier limit)
+- Dimensions: 768 (all-mpnet-base-v2)
+- Metric: Cosine similarity
+
+Metadata Schema:
+{
+  "type": "resume" | "job",
+  "user_id": "<uuid>",      # For type=resume
+  "job_id": "<uuid>",       # For type=job
+  "source": "adzuna" | "remoteok"  # For type=job
+}
+
+Query Pattern:
+- Search jobs: query=resume_embedding, filter={type: "job"}, top_k=50
+- Dedup check (future): query=job_embedding, filter={type: "job", source: X}, threshold=0.95
+
+JOB DEDUPLICATION
+--------------------------------------------------------------------------------
+Strategy: Hash-based (first-seen wins)
+
+Algorithm:
+1. Normalize: title.lower(), company.lower(), location.lower()
+2. Hash: SHA256(f"{title}|{company}|{location}")
+3. Insert: ON CONFLICT (dedup_hash) DO NOTHING
+4. Result: Duplicates across Adzuna/RemoteOK ignored
+
+Trade-offs:
+- Fast, deterministic
+- Misses fuzzy duplicates ("Senior Engineer" vs "Sr Engineer")
+- Good enough for MVP
+
+JOB REFRESH LOGIC
+--------------------------------------------------------------------------------
+Scheduler: APScheduler (in-process)
+Frequency: Daily (configurable via env var: JOB_REFRESH_CRON)
+Trigger: Manual via POST /api/jobs/refresh also supported
+
+Flow:
+1. Fetch jobs from Adzuna API (query="software engineer", results_per_page=50)
+2. Fetch jobs from RemoteOK API (tag="dev", limit=50)
+3. For each job:
+   a. Compute dedup_hash
+   b. Generate embedding (all-mpnet-base-v2)
+   c. Upsert to Postgres (dedup via hash constraint)
+   d. Upsert to Pinecone (id=job.pinecone_id, metadata={type: "job", ...})
+4. Log stats (new jobs, duplicates skipped)
+
+LLM INTEGRATION
+--------------------------------------------------------------------------------
+
+Local Service (runs on dev machine):
+- Framework: FastAPI (separate service)
+- Model Loading: llama-cpp-python with GPU support (ROCm)
+- Endpoint: POST /generate
+  Request: {"prompt": str, "max_tokens": int, "temperature": float}
+  Response: {"text": str, "tokens_generated": int}
+
+Backend Integration:
+- LocalLLMAdapter calls http://<tailscale-ip>:8000/generate
+- Timeout: 60s (local inference can be slow)
+- Retry: No retry (fail fast on errors)
+- Fallback: None (accept degraded service if local machine down)
+
+Prompts (managed in domain services):
+- Gap Analysis: "Compare resume skills to job requirements. Output JSON..."
+- Interview Questions: "Generate 5 technical questions targeting skill gaps..."
+- Answer Evaluation: "Evaluate candidate answer, provide score 1-10..."
+
+LANGGRAPH AGENT
+--------------------------------------------------------------------------------
+
+Interview Flow (State Machine):
+States: START → QUESTION_GENERATED → AWAITING_ANSWER → ANSWER_EVALUATED → NEXT_QUESTION | END
+
+Nodes:
+1. GenerateQuestion: LLM call (job + resume + gaps) → question
+2. EvaluateAnswer: LLM call (question + answer) → score + feedback
+3. DecideNext: If questions < 5, goto GenerateQuestion; else END
+
+State Schema:
+{
+  "job_id": str,
+  "resume_text": str,
+  "questions": [{"text": str, "topic": str}],
+  "answers": [{"text": str, "score": int, "feedback": str}],
+  "current_index": int
+}
+
+Persistence: Stored in InterviewSession.conversation_history (JSONB)
+
+ERROR HANDLING
+--------------------------------------------------------------------------------
+
+Resume Upload:
+- Max size: 10MB (HTTP 413 if exceeded)
+- Allowed formats: PDF only (HTTP 415 if other)
+- PDF parse fail (scanned image): HTTP 422 "Text extraction failed"
+
+Job API Failures:
+- Rate limit: Log warning, return cached jobs
+- API down: HTTP 503 "Job source unavailable, showing cached results"
+- No matches: Return top 10 jobs by general relevance (ignore low scores)
+
+LLM Failures:
+- Timeout (>60s): HTTP 504 "LLM service unavailable"
+- Malformed JSON: Retry once with "Output valid JSON" appended to prompt
+- Local service down: HTTP 503 "LLM service offline"
+
+Vector DB Failures:
+- Pinecone unreachable: HTTP 503 "Search unavailable"
+- Embedding generation error: HTTP 500, log stack trace
+
+TESTING STRATEGY
+--------------------------------------------------------------------------------
+
+Unit Tests (tests/domain/):
+- Test pure domain logic (no DB, no API calls)
+- Mock all ports (LLMPort, VectorDBPort, etc.)
+- Target: 100% coverage of domain services
+
+Integration Tests (tests/adapters/):
+- Test adapter implementations with real dependencies (test DB, mock APIs)
+- Use pytest fixtures for DB setup/teardown
+- Mock external HTTP calls (responses library)
+
+E2E Tests (tests/api/):
+- Test full HTTP request/response cycle
+- Use TestClient (FastAPI)
+- Mock LLM/Pinecone (avoid external calls in CI)
+
+.http Files:
+- Manual testing during development
+- One file per route group (resume.http, jobs.http, interview.http)
+- Include auth headers, example payloads
+
+LOGGING
+--------------------------------------------------------------------------------
+
+Library: structlog
+Format: JSON (one log per line)
+
+Standard Fields:
+{
+  "timestamp": "2025-01-31T12:34:56Z",
+  "level": "INFO",
+  "logger": "app.services.job_matching",
+  "message": "Job search completed",
+  "user_id": "default-user",
+  "request_id": "abc-123",  # From middleware
+  "context": {
+    "num_results": 42,
+    "query_time_ms": 234
+  }
+}
+
+Destinations:
+- Development: stdout (pretty-printed)
+- Production: stdout (JSON, captured by Docker logs)
+- Future: Ship to CloudWatch/Datadog
+
+PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+
+SkillGap/
+├── backend/
+│   ├── app/
+│   │   ├── domain/
+│   │   │   ├── models/
+│   │   │   │   ├── resume.py
+│   │   │   │   ├── job.py
+│   │   │   │   └── interview.py
+│   │   │   ├── services/
+│   │   │   │   ├── job_matching_service.py
+│   │   │   │   ├── gap_analysis_service.py
+│   │   │   │   └── interview_service.py
+│   │   │   └── ports/
+│   │   │       ├── llm_port.py
+│   │   │       ├── vector_db_port.py
+│   │   │       ├── job_source_port.py
+│   │   │       ├── auth_port.py
+│   │   │       └── repositories.py
+│   │   ├── adapters/
+│   │   │   ├── llm/
+│   │   │   │   └── local_llm_adapter.py
+│   │   │   ├── vector_db/
+│   │   │   │   └── pinecone_adapter.py
+│   │   │   ├── job_sources/
+│   │   │   │   ├── adzuna_adapter.py
+│   │   │   │   └── remoteok_adapter.py
+│   │   │   ├── auth/
+│   │   │   │   └── stub_auth_adapter.py
+│   │   │   └── repositories/
+│   │   │       ├── resume_repository.py
+│   │   │       └── job_repository.py
+│   │   ├── infrastructure/
+│   │   │   ├── database/
+│   │   │   │   ├── models.py
+│   │   │   │   └── session.py
+│   │   │   ├── scheduler/
+│   │   │   │   └── job_refresh.py
+│   │   │   └── logging.py
+│   │   ├── api/
+│   │   │   ├── routes/
+│   │   │   │   ├── resume.py
+│   │   │   │   ├── jobs.py
+│   │   │   │   └── interview.py
+│   │   │   ├── dependencies.py
+│   │   │   ├── schemas.py
+│   │   │   └── middleware.py
+│   │   ├── core/
+│   │   │   └── config.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── domain/
+│   │   ├── adapters/
+│   │   └── api/
+│   ├── alembic/
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   │   ├── Home.tsx
+│   │   │   ├── JobResults.tsx
+│   │   │   ├── JobDetail.tsx
+│   │   │   └── Interview.tsx
+│   │   ├── lib/
+│   │   │   └── api-client.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── public/
+│   ├── package.json
+│   └── Dockerfile
+├── llm-service/
+│   ├── main.py
+│   ├── requirements.txt
+│   └── README.md
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── modules/
+│       ├── compute/
+│       ├── database/
+│       └── storage/
+├── .http/
+│   ├── resume.http
+│   ├── jobs.http
+│   └── interview.http
+├── docker-compose.yml
+├── .env.example
+└── README.md
+
+IMPLEMENTATION PHASES
+--------------------------------------------------------------------------------
+
+Phase 1: Core Infrastructure + Job Matching
+- Setup: Postgres, Alembic migrations, FastAPI skeleton
+- Auth: Stub adapter (hardcoded user)
+- Domain: Resume, Job models + JobMatchingService
+- Adapters: SQLAlchemy repositories, Pinecone adapter, embedding service
+- API: POST /resume/upload, POST /jobs/search
+- Job Sources: Adzuna + RemoteOK adapters (manual trigger only)
+- Frontend: Upload page, job results list
+- Testing: Unit tests for domain, integration tests for adapters
+- Deliverable: End-to-end resume upload → job search flow
+
+Phase 2: Skills Extraction + Scheduled Refresh
+- LLM Service: Local llama.cpp FastAPI wrapper
+- Tailscale: Setup tunnel (local ↔ cloud)
+- Domain: GapAnalysisService
+- Adapter: LocalLLMAdapter
+- API: GET /jobs/{id} (with gap analysis), GET /jobs/{id}/skills
+- Scheduler: APScheduler for daily job refresh
+- Frontend: Job detail page with skills breakdown
+- Testing: Mock LLM responses in tests
+- Deliverable: Skill gap analysis with local LLM
+
+Phase 3: Interview Agent
+- LangGraph: Define interview state machine
+- Domain: InterviewService
+- API: POST /interview/start, POST /interview/{id}/answer, GET /interview/{id}/feedback
+- Frontend: Interview chat interface
+- Testing: E2E interview flow tests
+- Deliverable: Functional mock interview feature
+
+Phase 4: Deployment + Polish
+- Terraform: Provision cloud resources (compute, DB, storage)
+- Docker: Multi-stage builds for backend/frontend
+- GitHub Actions: CI/CD pipeline (test → build → deploy)
+- Monitoring: Structured logging to CloudWatch
+- Documentation: README with architecture diagrams
+- Testing: Load testing, error scenario coverage
+- Deliverable: Production-ready deployment on free tier
+
+ENVIRONMENT VARIABLES
+--------------------------------------------------------------------------------
+
+Backend (.env):
+DATABASE_URL=postgresql://user:pass@localhost:5432/skillgap
+PINECONE_API_KEY=pk-...
+PINECONE_INDEX_NAME=skillgap-dev
+PINECONE_ENVIRONMENT=us-west1-gcp
+ADZUNA_APP_ID=...
+ADZUNA_API_KEY=...
+REMOTEOK_API_URL=https://remotive.com/api/remote-jobs
+LLM_ENDPOINT=http://100.x.x.x:8000  # Tailscale IP
+EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
+AUTH_STUB_USER_ID=default-user
+JOB_REFRESH_CRON=0 2 * * *  # Daily at 2 AM
+STORAGE_BUCKET=skillgap-resumes
+STORAGE_PROVIDER=s3  # or azure_blob, gcs
+LOG_LEVEL=INFO
+
+Frontend (.env):
+VITE_API_BASE_URL=http://localhost:8000/api
+VITE_AUTH_TOKEN=stub-token-12345
+
+LLM Service (.env):
+MODEL_PATH=/models/mistral-7b-instruct-v0.3.Q5_K_M.gguf
+GPU_LAYERS=35  # Number of layers to offload to GPU
+CONTEXT_SIZE=4096
+PORT=8000
+
+OPEN QUESTIONS / FUTURE ENHANCEMENTS
+--------------------------------------------------------------------------------
+
+- Resume versioning: Allow users to upload multiple resume variants?
+- Job alerts: Email/webhook when new high-match jobs found?
+- Interview recordings: Store audio/video for playback?
+- Analytics: Track which skills are most in-demand across jobs?
+- Collaborative filtering: "Users with similar resumes also applied to..."?
+- Real auth: OAuth (Google/GitHub) vs JWT vs API keys?
+- Multi-tenancy: Expand to multi-user with proper isolation?
+- Hybrid search: Combine vector similarity with keyword filters (location, salary)?
+- Resume builder: Generate tailored resume based on job description?

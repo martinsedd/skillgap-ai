@@ -1,0 +1,50 @@
+[project]
+name = "skillgap-backend"
+version = "0.1.0"
+description = "SkillGap job matching backend"
+requires-python = ">=3.11"
+dependencies = [
+  "alembic>=1.18.3",
+  "apscheduler>=3.11.2",
+  "asyncpg>=0.31.0",
+  "fastapi>=0.128.0",
+  "httpx>=0.28.1",
+  "langchain>=1.2.7",
+  "langgraph>=1.0.7",
+  "llama-cpp-python>=0.3.16",
+  "pinecone-client>=6.0.0",
+  "psycopg2-binary>=2.9.11",
+  "pydantic-settings>=2.12.0",
+  "pypdf2>=3.0.1",
+  "pytest>=9.0.2",
+  "python-multipart>=0.0.22",
+  "sentence-transformers>=5.2.2",
+  "sqlalchemy>=2.0.46",
+  "structlog>=25.5.0",
+  "uvicorn[standard]>=0.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.4",
+  "pytest-asyncio>=0.23.3",
+  "pytest-cov>=4.1.0",
+  "ruff>=0.1.14",
+  "httpx>=0.26.0",
+  "pre-commit>=4.5.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

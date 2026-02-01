@@ -1,0 +1,499 @@
+SkillGap - Development Roadmap
+================================================================================
+
+PHASE 0: PROJECT SETUP
+--------------------------------------------------------------------------------
+Foundation & Development Environment
+
+Infrastructure:
+□ Initialize git repository
+□ Create project structure (backend/, frontend/, llm-service/, terraform/)
+□ Setup docker-compose.yml (Postgres container)
+□ Create .env.example files for all services
+□ Setup .gitignore (Python, Node, Terraform)
+
+Backend Skeleton:
+□ Create backend/requirements.txt (FastAPI, SQLAlchemy, structlog, etc.)
+□ Setup virtual environment
+□ Initialize FastAPI app (app/main.py)
+□ Configure structlog (app/infrastructure/logging.py)
+□ Create app/core/config.py (load env vars with pydantic-settings)
+□ Add health check endpoint (GET /health)
+
+Database:
+□ Initialize Alembic (alembic init)
+□ Configure Alembic to use async SQLAlchemy
+□ Create first migration: users table
+□ Create database session factory (app/infrastructure/database/session.py)
+
+Testing Setup:
+□ Create tests/ directory structure
+□ Setup pytest.ini and conftest.py
+□ Add test database fixture
+□ Write sample test (test health endpoint)
+□ Create .http/ directory with example requests
+
+Frontend Skeleton:
+□ Initialize Vite + React + TypeScript project
+□ Install dependencies (react-router-dom, @tanstack/react-query, tailwind, shadcn)
+□ Configure Tailwind CSS
+□ Setup shadcn/ui components
+□ Create basic routing structure (App.tsx)
+□ Add API client wrapper (lib/api-client.ts)
+
+CI/CD Foundation:
+□ Create .github/workflows/backend-test.yml
+□ Create .github/workflows/frontend-build.yml
+□ Add basic linting (ruff for Python, eslint for TS)
+
+Deliverable: Empty app runs locally, tests pass, CI green
+
+
+PHASE 1: CORE INFRASTRUCTURE + JOB MATCHING
+--------------------------------------------------------------------------------
+Resume Upload → Job Search MVP
+
+Domain Layer:
+□ Create domain/models/resume.py (Resume dataclass)
+□ Create domain/models/job.py (Job dataclass with required_skills)
+□ Create domain/ports/repositories.py (ResumeRepository, JobRepository ABCs)
+□ Create domain/ports/vector_db_port.py (VectorDBPort ABC)
+□ Create domain/ports/job_source_port.py (JobSourcePort ABC)
+□ Create domain/ports/auth_port.py (AuthPort ABC)
+□ Create domain/services/job_matching_service.py (rank_jobs logic)
+
+Infrastructure - Database:
+□ Create SQLAlchemy models (infrastructure/database/models.py):
+  - UserModel
+  - ResumeModel
+  - JobModel (with dedup_hash unique constraint)
+□ Write Alembic migration for resume and job tables
+□ Seed default user via migration
+
+Adapters - Repositories:
+□ Implement adapters/repositories/resume_repository.py (SQLAlchemy)
+□ Implement adapters/repositories/job_repository.py (with dedup logic)
+□ Write unit tests for repository mappers (domain model ↔ ORM)
+
+Adapters - Auth:
+□ Implement adapters/auth/stub_auth_adapter.py (returns "default-user")
+□ Write test for stub auth
+
+Adapters - Embedding:
+□ Create adapters/embedding/sentence_transformer_adapter.py
+□ Download all-mpnet-base-v2 model (cache locally)
+□ Write test with sample text embedding
+
+Adapters - Vector DB:
+□ Create Pinecone account + get API key
+□ Create index (name: skillgap-dev, dims: 768, metric: cosine)
+□ Implement adapters/vector_db/pinecone_adapter.py
+□ Write integration test (upsert + search with test vectors)
+
+Adapters - Job Sources:
+□ Register for Adzuna API (get app_id + api_key)
+□ Implement adapters/job_sources/adzuna_adapter.py
+□ Implement adapters/job_sources/remoteok_adapter.py
+□ Write integration tests with mocked HTTP responses
+□ Add job deduplication logic (SHA256 hash in repository)
+
+API Layer - Dependencies:
+□ Create api/dependencies.py:
+  - get_db_session()
+  - get_auth_service() → StubAuthAdapter
+  - get_resume_repository()
+  - get_job_repository()
+  - get_vector_db()
+  - get_embedding_service()
+  - get_current_user() (calls auth_service.validate_token)
+
+API Layer - Resume Endpoints:
+□ Create api/schemas.py (Pydantic models: ResumeUploadResponse, etc.)
+□ Implement api/routes/resume.py:
+  - POST /resume/upload (accept PDF, extract text, embed, save)
+  - GET /resume (return current user's resume)
+□ Add PDF text extraction (PyPDF2 or pdfplumber)
+□ Add BackgroundTask for embedding generation
+□ Write .http/resume.http test file
+□ Write API integration tests
+
+API Layer - Jobs Endpoints:
+□ Implement api/routes/jobs.py:
+  - POST /jobs/search (get resume embedding, query Pinecone, rank results)
+  - GET /jobs/{id} (return job details, no gap analysis yet)
+  - POST /jobs/refresh (manual trigger: fetch from APIs, embed, store)
+□ Write .http/jobs.http test file
+□ Write API integration tests
+
+Frontend - Resume Upload:
+□ Create pages/Home.tsx (upload form)
+□ Add file input + upload button (shadcn Button, Input)
+□ Integrate with react-query (useMutation for upload)
+□ Show upload progress/success state
+□ Store resume ID in local state
+
+Frontend - Job Search:
+□ Add search trigger on Home page (button after upload)
+□ Create pages/JobResults.tsx
+□ Fetch jobs via react-query (useQuery)
+□ Display job cards (title, company, match score)
+□ Add loading/error states
+□ Add routing: / → /jobs after search
+
+Docker & Local Dev:
+□ Write backend/Dockerfile (multi-stage build)
+□ Update docker-compose.yml (add backend service)
+□ Test full stack locally (docker-compose up)
+
+Documentation:
+□ Update README.md (setup instructions, API examples)
+□ Document environment variables in .env.example
+
+Deliverable: User uploads resume → searches jobs → sees ranked results
+
+
+PHASE 2: SKILLS EXTRACTION + SCHEDULED REFRESH
+--------------------------------------------------------------------------------
+LLM Integration + Gap Analysis
+
+LLM Service (Local):
+□ Create llm-service/main.py (FastAPI wrapper)
+□ Install llama-cpp-python with GPU support
+□ Download Mistral-7B-Instruct-v0.3 Q5_K_M model
+□ Implement POST /generate endpoint (accept prompt, return text)
+□ Test inference locally (verify GPU usage, token/sec)
+□ Write llm-service/README.md (setup + troubleshooting)
+
+Tailscale Setup:
+□ Install Tailscale on dev machine
+□ Start LLM service, expose on Tailscale IP
+□ Test connectivity from another machine on network
+□ Document Tailscale setup in README
+
+Domain Layer - Gap Analysis:
+□ Create domain/services/gap_analysis_service.py
+□ Define prompt templates (resume + job → gap analysis JSON)
+□ Implement analyze_gap(resume, job) → GapReport
+□ Write unit tests with mocked LLM responses
+
+Adapters - LLM:
+□ Create domain/ports/llm_port.py (LLMPort ABC)
+□ Implement adapters/llm/local_llm_adapter.py
+□ Add retry logic (1 retry on timeout)
+□ Add JSON parsing with fallback
+□ Write integration test (mock HTTP to local service)
+
+API Layer - Gap Analysis:
+□ Update GET /jobs/{id} to include gap analysis
+□ Create GET /jobs/{id}/skills (extract skills via LLM)
+□ Add caching: store extracted_skills in Job.extracted_skills (JSONB)
+□ Write .http test cases
+□ Write API tests
+
+Scheduled Job Refresh:
+□ Install APScheduler
+□ Create infrastructure/scheduler/job_refresh.py
+□ Implement refresh_jobs() function:
+  - Fetch from Adzuna + RemoteOK
+  - Deduplicate via hash
+  - Generate embeddings
+  - Upsert to Postgres + Pinecone
+□ Add scheduler initialization in main.py
+□ Add JOB_REFRESH_CRON env var
+□ Test manual trigger endpoint
+□ Verify scheduled execution (set to every 5 min for testing)
+
+Frontend - Job Detail Page:
+□ Create pages/JobDetail.tsx
+□ Fetch job + gap analysis via react-query
+□ Display job description
+□ Display skills breakdown (required, nice-to-have, tech stack)
+□ Highlight skill gaps (user missing vs required)
+□ Add "Start Interview" button (links to Phase 3)
+
+Testing:
+□ Add unit tests for GapAnalysisService
+□ Add integration tests for scheduled refresh
+□ Mock LLM calls in all tests (avoid hitting local service)
+
+Documentation:
+□ Document LLM service setup (model download, GPU config)
+□ Add architecture diagram (cloud ↔ Tailscale ↔ local LLM)
+
+Deliverable: Jobs show skill gaps, daily refresh runs, LLM integrated
+
+
+PHASE 3: INTERVIEW AGENT
+--------------------------------------------------------------------------------
+LangGraph-Based Mock Interviews
+
+Domain Layer - Interview:
+□ Create domain/models/interview.py (Interview, Question, Answer dataclasses)
+□ Create domain/services/interview_service.py
+□ Define LangGraph state schema (questions[], answers[], current_index)
+□ Implement graph nodes:
+  - generate_question_node(state) → updated state
+  - evaluate_answer_node(state) → updated state
+  - decide_next_node(state) → "continue" | "end"
+□ Implement compile_interview_graph() → runnable graph
+□ Write unit tests with mocked LLM
+
+Infrastructure - Database:
+□ Write Alembic migration: interview_sessions table
+  - state (enum), conversation_history (JSONB), scores, etc.
+
+Adapters - Repository:
+□ Implement adapters/repositories/interview_repository.py
+□ Add save_session(), load_session(), update_state() methods
+
+API Layer - Interview Endpoints:
+□ Create api/routes/interview.py:
+  - POST /interview/start (create session, generate first question)
+  - POST /interview/{id}/answer (submit answer, get next question or end)
+  - GET /interview/{id}/feedback (final report with resources)
+  - GET /interview/{id} (get current session state)
+□ Create Pydantic schemas (InterviewStartRequest, AnswerSubmission, etc.)
+□ Write .http/interview.http test file
+□ Write API integration tests
+
+LLM Prompts:
+□ Define question generation prompt (target skill gaps)
+□ Define answer evaluation prompt (score 1-10 + feedback)
+□ Define final feedback prompt (resources, improvement areas)
+□ Test prompts manually with llm-service
+
+Frontend - Interview Page:
+□ Create pages/Interview.tsx
+□ Add chat interface (shadcn Card, Input, Button)
+□ Display questions one at a time
+□ Submit answers via react-query mutation
+□ Show feedback after each answer
+□ Display final score + resources at end
+□ Add ability to restart interview
+
+Testing:
+□ Write e2e test: start interview → answer 5 questions → get feedback
+□ Test error cases (LLM timeout, invalid JSON)
+
+Documentation:
+□ Document LangGraph state machine (diagram + explanation)
+□ Add example interview flow to README
+
+Deliverable: Functional mock interview feature, end-to-end
+
+
+PHASE 4: DEPLOYMENT + POLISH
+--------------------------------------------------------------------------------
+Production-Ready on Free Tier
+
+Terraform - Base Infrastructure:
+□ Create terraform/main.tf (provider config)
+□ Create terraform/variables.tf (region, instance_type, etc.)
+□ Choose cloud provider (AWS/Azure/GCP based on free tier availability)
+□ Create terraform/modules/compute/ (EC2/VM config)
+□ Create terraform/modules/database/ (Postgres on same instance)
+□ Create terraform/modules/storage/ (S3/blob for resumes)
+□ Write terraform/outputs.tf (instance IP, storage bucket name)
+
+Terraform - Networking:
+□ Configure VPC/network (if needed)
+□ Setup security groups (allow 80, 443, 22, Tailscale port)
+□ Reserve static IP (if available in free tier)
+
+Terraform - Tailscale Integration:
+□ Add Tailscale client installation in user-data/cloud-init
+□ Configure Tailscale auth key (via env var)
+□ Test connectivity: cloud instance → local LLM service
+
+Docker - Production Builds:
+□ Update backend/Dockerfile (multi-stage, optimized for prod)
+□ Create frontend/Dockerfile (nginx serve)
+□ Update docker-compose.yml for production mode
+□ Add health checks to containers
+
+CI/CD Pipeline:
+□ Expand .github/workflows/backend-test.yml:
+  - Run pytest with coverage
+  - Build Docker image
+  - Push to registry (GHCR or DockerHub)
+□ Expand .github/workflows/frontend-build.yml:
+  - Run type checking (tsc)
+  - Build production bundle
+  - Push Docker image
+□ Create .github/workflows/deploy.yml:
+  - Trigger on merge to main
+  - SSH to cloud instance
+  - Pull latest images
+  - Restart containers
+  - Run smoke tests
+
+Database Migrations - Production:
+□ Add Alembic migration runner to deployment script
+□ Test migration rollback procedures
+□ Seed production DB with default user
+
+SSL/TLS:
+□ Setup nginx reverse proxy on cloud instance
+□ Configure Let's Encrypt (certbot) for SSL
+□ Update API base URL in frontend
+
+Monitoring & Logging:
+□ Configure structlog to output JSON in production
+□ Setup log rotation (logrotate)
+□ Optional: Ship logs to CloudWatch/Azure Monitor (if free tier supports)
+□ Add error tracking (Sentry free tier or similar)
+
+Security Hardening:
+□ Disable SSH password auth (key-only)
+□ Configure firewall (ufw/iptables)
+□ Setup automatic security updates
+□ Review CORS settings (restrict to frontend domain)
+□ Add rate limiting middleware to API
+
+Performance Optimization:
+□ Add response caching headers
+□ Optimize Pinecone queries (reduce top_k if slow)
+□ Add database connection pooling
+□ Minify frontend assets
+□ Enable gzip compression in nginx
+
+Error Handling:
+□ Add global exception handler to FastAPI
+□ Implement graceful degradation (LLM down → show cached data)
+□ Add user-friendly error messages
+□ Log all errors with context
+
+Testing - Production Readiness:
+□ Load test API endpoints (locust or wrk)
+□ Test deployment rollback procedure
+□ Verify all env vars documented
+□ Test cold start (fresh instance deployment)
+
+Documentation:
+□ Write deployment guide (README-DEPLOYMENT.md)
+□ Document infrastructure architecture (diagram)
+□ Add troubleshooting guide (common issues)
+□ Create demo video or screenshots for portfolio
+□ Write project retrospective (lessons learned)
+
+Final Polish:
+□ Review all error messages for clarity
+□ Add loading states to all frontend actions
+□ Test full user journey (upload → search → interview)
+□ Fix any UI bugs or inconsistencies
+□ Add meta tags for social sharing (og:image, etc.)
+
+Deliverable: Live application on free tier, fully functional
+
+
+POST-LAUNCH ENHANCEMENTS (Optional)
+--------------------------------------------------------------------------------
+Future Improvements (Not Blocking MVP)
+
+□ Real authentication (swap StubAuthAdapter for JWT)
+□ Multi-user support (remove single-user constraint)
+□ Resume versioning (allow multiple resume variants)
+□ Job alerts (email when new high-match jobs found)
+□ Analytics dashboard (track skill demand trends)
+□ Hybrid search (combine vector + keyword filters)
+□ Export features (save gap analysis as PDF)
+□ Interview recordings (store conversation history for review)
+□ Mobile-responsive design improvements
+□ Accessibility audit (WCAG compliance)
+
+
+TESTING MILESTONES (Per Phase)
+--------------------------------------------------------------------------------
+
+Phase 1:
+□ Domain tests: >90% coverage
+□ Repository tests: All CRUD operations
+□ API tests: All endpoints with auth
+□ Frontend: Manual testing of upload + search flow
+
+Phase 2:
+□ LLM adapter tests: Mock all HTTP calls
+□ Gap analysis tests: Validate JSON parsing
+□ Scheduler tests: Verify job refresh logic
+□ Frontend: Job detail page rendering
+
+Phase 3:
+□ LangGraph tests: Mock all nodes
+□ Interview flow e2e test
+□ Frontend: Full interview session completion
+
+Phase 4:
+□ Load tests: 100 concurrent users
+□ Security tests: OWASP top 10 checks
+□ Deployment tests: Fresh instance provision + deploy
+□ Smoke tests: All critical paths post-deployment
+
+
+DEPENDENCIES & BLOCKERS
+--------------------------------------------------------------------------------
+
+Phase 1 → Phase 2:
+- Blocker: Pinecone index must exist before Phase 2 scheduled refresh
+- Blocker: Local LLM service must be working for gap analysis
+
+Phase 2 → Phase 3:
+- Blocker: LLM prompts must return valid JSON for interview agent
+- Dependency: Job data must be populated for interview context
+
+Phase 3 → Phase 4:
+- Blocker: All core features must work locally before deployment
+- Blocker: Tailscale must work locally before cloud setup
+
+Phase 4 Prerequisites:
+- Cloud account with free tier access
+- Tailscale account + auth key
+- Domain name (optional, can use IP)
+- GitHub account for CI/CD
+
+
+ROLLBACK PROCEDURES
+--------------------------------------------------------------------------------
+
+If Phase 2 fails (LLM integration):
+□ Fallback: Use OpenAI API temporarily (add OpenAIAdapter)
+□ Continue with rest of Phase 2 using API-based LLM
+
+If Phase 3 too complex (LangGraph):
+□ Fallback: Simplify to basic prompt chain (no agent)
+□ Still functional, less impressive for portfolio
+
+If Phase 4 deployment blocked:
+□ Fallback: Run everything locally, record demo video
+□ Terraform still valuable for showcasing IaC skills
+
+
+DEFINITION OF DONE (Per Phase)
+--------------------------------------------------------------------------------
+
+Phase 1:
+✓ User can upload resume and see it stored
+✓ User can search jobs and see ranked results
+✓ All tests passing
+✓ CI pipeline green
+✓ README updated with setup instructions
+
+Phase 2:
+✓ Job detail page shows skill gap analysis
+✓ Daily job refresh runs successfully
+✓ LLM service responds to inference requests
+✓ Tailscale connectivity verified
+✓ All new tests passing
+
+Phase 3:
+✓ User can complete full mock interview (5 questions)
+✓ Feedback generated with resources
+✓ Interview state persisted correctly
+✓ All tests passing
+
+Phase 4:
+✓ Application accessible via public URL
+✓ HTTPS enabled
+✓ All services running on cloud instance
+✓ Deployment automated via CI/CD
+✓ Documentation complete
+✓ Demo-ready for portfolio

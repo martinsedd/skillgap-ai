@@ -1,0 +1,129 @@
+SkillGap - Job Search Assistant Portfolio Project
+
+Project Overview
+
+A full-stack web application that helps tech job seekers find relevant
+positions, understand skill gaps, and prepare for interviews through AI-powered
+analysis and mock interviews.
+
+Core Features
+
+1. Job Matching & Gap Analysis
+- Users upload resume (PDF/text)
+- System scrapes job postings from tech job boards (LinkedIn, Indeed, etc)
+- Embeds resume and jobs in vector DB
+- Returns ranked matches with semantic similarity scoring
+- For each match, generates gap analysis: required skills -> user's skills ->
+  actionable gaps
+
+2. Skills Extraction & Breakdown
+- Parses job descriptions to extract:
+  -- Required skills (hard requirements)
+  -- Nice-to-have skills
+  -- Seniority level indicators
+  -- Tech stack specifics
+- Stores extracted data alongside job posting for query-ability
+- User can ask: "What's the skill delta between my resume and this job?"
+
+3. Agentic Interview Prep
+- Users selects a matched job
+- LangGraph agent analyzes the job description and user's resume
+- Generates tailored mock interview questions targeting:
+  -- User's skill gaps
+  -- Job-specific technical topics
+  -- Experience mismatches
+- Conducts interactive mock interview via API
+- Provides post-interview feedback with resources for improvement
+
+---
+
+Tech Stack
+
+Backend:
+
+- FastAPI (REST API)
+- LangGraph (agentic interview orchestration)
+- LangChain (RAG pipeline, prompt management)
+- Celery + Redis (background job scraping)
+- SQLAlchemy (user/resume storage)
+
+AI/Vector:
+
+- OpenAI/Mistral (LLM for analysis, interviews, feedback)
+- Pinecone or FAISS (vector DB for job/resume embeddings)
+- Sentence-transformers (embedding model)
+
+Data/Scraping:
+
+- BeautifulSoup/Scrapy (job board scraping)
+- pydantic (data validation)
+
+DevOps/Deployment:
+
+- Docker
+- AWS (S3 for resume storage, EC2 for hosting, or ECS for tasks)
+- Github Actions (CI/CD)
+- PostgreSQL (persistent data)
+
+---
+
+API Endpoints
+
+POST /api/resume/upload          # Upload and store resume
+GET /api/resume/<id>             # Retrieve resume details
+
+POST /api/jobs/search            # Search jobs with resume matching
+GET /api/jobs/<id>               # Get single job + gap analysis
+GET /api/jobs/<id>/skills        # Extracted skills breakdown
+
+POST /api/interview/start        # Initiate mock interview for a job
+POST /api/interview/<id>/answer  # Submit answer to interview question
+GET /api/interview/<id>/feedback # Get interview feedback + resources
+
+POST /api/scrape/trigger         # Manually trigger job scraping
+GET  /api/scrape/status          # Check scraping job status
+
+---
+
+Data Models
+
+Resume:
+  - User ID, uploaded file, extracted text, embedding vector, upload timestamp
+Job Posting:
+  - Title, company, description, URL, scraped_at, embedding vector
+  - Extracted skills (required, nice-to-have), seniority level, tech stack
+Interview Session:
+  - UserID, jobID, questions[], answers[], overall_score, feedback, timestamp
+
+---
+
+Implementation Phases
+
+Phase 1: MVP (Resume + Job Matching)
+
+- Resume upload/parsing
+- Manual job posting seeding (hardcoded or small dataset)
+- Vector DB setup and embeddings
+- Basic similarity search with gap analysis
+- Simple FastAPI endpoints
+
+Phase 2: Scraping + Skills Extraction
+
+- Build scraper for 1-2 job boards (LinkedIn, Indeed)
+- Celery background job for scheduled scraping
+- LLM-powered skills extraction from job descriptions
+- Store extracted data in DB
+
+Phase 3: Interview Agent
+
+- LangGraph agent design for interview orchestration
+- Prompt templates for question generation based on gaps
+- Mock interview conversation flow
+- Feedback generation with learning resources
+
+Phase 4: Polish & Deployment
+
+- CI/CD pipeline (GitHub Actions)
+- Docker containerization
+- Deploy to AWS
+- Error handling, logging, testing
