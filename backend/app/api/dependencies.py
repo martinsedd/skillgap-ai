@@ -15,6 +15,7 @@ from app.domain.ports.job_source_port import JobSourcePort
 from app.domain.ports.repositories import JobRepository, ResumeRepository
 from app.domain.ports.vector_db_port import VectorDBPort
 from app.domain.services.job_matching_service import JobMatchingService
+from app.domain.services.resume_service import ResumeService
 from app.infrastructure.database.session import get_db
 from app.infrastructure.logging import get_logger
 
@@ -95,3 +96,16 @@ def get_job_matching_service(
     embedding_service: EmbeddingPort = Depends(get_embedding_service),
 ) -> JobMatchingService:
     return JobMatchingService(vector_db=vector_db, embedding_service=embedding_service)
+
+
+def get_resume_service(
+    resume_repo: ResumeRepository = Depends(get_resume_repository),
+    embedding_service: EmbeddingPort = Depends(get_embedding_service),
+    vector_db: VectorDBPort = Depends(get_vector_db),
+) -> ResumeService:
+    return ResumeService(
+        resume_repository=resume_repo,
+        embedding_service=embedding_service,
+        vector_db=vector_db,
+        storage_bucket=settings.STORAGE_BUCKET,
+    )
