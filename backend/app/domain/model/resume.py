@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.domain.models.job import Job
+from app.domain.model.job import Job
 
 
 @dataclass
