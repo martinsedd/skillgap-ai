@@ -140,7 +140,7 @@ class SQLAlchemyJobRepository(JobRepository):
             location=str(model.location) if str(model.location) else None,
             salary=str(model.salary) if str(model.salary) else None,
             posted_at=(model.posted_at if isinstance(model.posted_at, datetime) else None),
-            fetched_at=(model.fetched_t if isinstance(model.fetched_at, datetime) else None),
+            fetched_at=(model.fetched_at if isinstance(model.fetched_at, datetime) else None),
             required_skills=skills.get("required"),
             nice_to_have_skills=skills.get("nice_to_have"),
             tech_stack=skills.get("tech_stack"),

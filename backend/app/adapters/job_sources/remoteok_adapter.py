@@ -1,7 +1,7 @@
-from datetime import datetime
-from typing import Any
 import re
+from datetime import datetime
 from html import unescape
+from typing import Any
 
 import httpx
 
@@ -23,7 +23,7 @@ class RemoteOKAdapter(JobSourcePort):
         location: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        logger.info("feteching_remoteok_jobs", query=query, limit=limit)
+        logger.info("fetching_remoteok_jobs", query=query, limit=limit)
 
         try:
             response = self._make_request()

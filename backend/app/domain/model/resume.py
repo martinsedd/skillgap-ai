@@ -13,7 +13,7 @@ class Resume:
     file_path: str
     pinecone_id: str
 
-    def extract_skils(self) -> list[str]:
+    def extract_skills(self) -> list[str]:
         """
         Extract skills from resume text.
         """
@@ -56,7 +56,7 @@ class Resume:
         Returns score between 0.0 and 1.0.
         """
         # HACK: Simple implementation - will enhance to use vector similarity
-        resume_skills = set(self.extract_skils())
+        resume_skills = set(self.extract_skills())
         job_skills = set(job.required_skills or [])
 
         if not job_skills:

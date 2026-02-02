@@ -79,10 +79,10 @@ def get_db_context() -> Generator[Session, None, None]:
 def init_db() -> None:
     from app.infrastructure.database.models import Base
 
-    logger.info("dataase_init", message="Initializing database")
+    logger.info("database_init", message="Initializing database")
     Base.metadata.create_all(bind=engine)
     logger.info("database_init_complete", message="Database initialized")
 
 
 def close_db() -> None:
-    logger.ingo("database_shutdown", message="Closing database connections")
+    logger.info("database_shutdown", message="Closing database connections")
