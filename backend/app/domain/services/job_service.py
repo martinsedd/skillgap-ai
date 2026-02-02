@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+
 from app.domain.model.job import Job, JobMatch
 from app.domain.model.resume import Resume
 from app.domain.ports.embedding_port import EmbeddingPort
@@ -8,6 +9,7 @@ from app.domain.ports.job_source_port import JobSourcePort
 from app.domain.ports.repositories import JobRepository, ResumeRepository
 from app.domain.ports.vector_db_port import VectorDBPort
 from app.domain.services.job_matching_service import JobMatchingService
+from app.domain.services.skill_extraction_service import SkillExtractionService
 from app.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -21,12 +23,14 @@ class JobService:
         job_matching_service: JobMatchingService,
         embedding_service: EmbeddingPort,
         vector_db: VectorDBPort,
+        skill_extraction_service: SkillExtractionService,
     ) -> None:
         self.job_repository = job_repository
         self.resume_repository = resume_repository
         self.job_matching_service = job_matching_service
         self.embedding_service = embedding_service
         self.vector_db = vector_db
+        self.skill_extraction_service = skill_extraction_service
 
     def search_jobs(self, user_id: str, top_k: int = 50) -> tuple[list[JobMatch], str]:
         logger.info("searching_jobs", user_id=user_id, top_k=top_k)
@@ -59,8 +63,15 @@ class JobService:
         logger.info("refreshing_jobs", query=query, location=location, limit=limit)
 
         all_jobs = self._fetch_from_sources(job_sources, query, location, limit)
-        saved_jobs = self.job_repository.bulk_save(all_jobs)
 
+        logger.info("extracting_skills_from_job", count=len(all_jobs))
+        for job in all_jobs:
+            try:
+                self.skill_extraction_service.update_job_with_skills(job)
+            except Exception as e:
+                logger.warning("skill_extraction_failed", job_id=job.id, error=str(e))
+
+        saved_jobs = self.job_repository.bulk_save(all_jobs)
         self._generate_embeddings_for_jobs(saved_jobs)
 
         fetched_count = len(all_jobs)
@@ -74,6 +85,14 @@ class JobService:
             duplicates=duplicates,
         )
         return fetched_count, saved_count, duplicates
+
+    def get_gap_analysis(self, user_id: str, job_id: str):
+        logger.info("getting_gap_analysis", user_id=user_id, job_id=job_id)
+
+        resume = self._get_user_resume(user_id)
+        job = self.get_job_by_id(job_id)
+
+        return self.skill_extraction_service.analyze_gap(resume, job)
 
     def _get_user_resume(self, user_id: str) -> Resume:
         resume = self.resume_repository.find_by_user_id(user_id)
