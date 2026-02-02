@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Any
+import re
+from html import unescape
 
 import httpx
 
@@ -74,15 +76,18 @@ class RemoteOKAdapter(JobSourcePort):
         return any(word in search_text for word in query_words)
 
     def _normalize_job(self, item: dict[str, Any]) -> dict[str, Any]:
+        description = item.get("description", "")
+        cleaned_description = self._clean_html(description) if description else ""
+
         return {
             "external_id": str(item.get("id", "")),
             "title": item.get("position", ""),
             "company": item.get("company", "Unknown"),
-            "description": item.get("description", ""),
+            "description": cleaned_description,
             "url": item.get("url", ""),
             "location": "Remote",  # RemoteOK is remote-only
             "salary": self._format_salary(item),
-            "posted_at": self._parse_date(item.get("date")),
+            "posted_at": self._parse_epoch(item.get("epoch")),
         }
 
     def _format_salary(self, item: dict[str, Any]) -> str | None:
@@ -99,14 +104,41 @@ class RemoteOKAdapter(JobSourcePort):
 
         return None
 
-    def _parse_date(self, timestamp: int | None) -> datetime | None:
-        if not timestamp:
+    def _clean_html(self, text: str) -> str:
+        """Remove HTML tags and decode entities from text."""
+        # Decode HTML entities
+        text = unescape(text)
+
+        # Remove HTML tags
+        text = re.sub(r"<[^>]+>", "", text)
+
+        # Fix common Unicode issues
+        # Replace smart quotes and dashes
+        text = text.replace("\u2018", "'").replace("\u2019", "'")  # Smart single quotes
+        text = text.replace("\u201c", '"').replace("\u201d", '"')  # Smart double quotes
+        text = text.replace("\u2013", "-").replace("\u2014", "-")  # En/em dashes
+        text = text.replace("\u2026", "...")  # Ellipsis
+
+        # Remove zero-width characters and other invisible Unicode
+        text = re.sub(r"[\u200b-\u200d\ufeff]", "", text)
+
+        # Normalize whitespace (including non-breaking spaces)
+        text = re.sub(r"\s+", " ", text)
+
+        # Remove any remaining problematic Unicode characters
+        text = text.encode("ascii", "ignore").decode("ascii")
+
+        return text.strip()
+
+    def _parse_epoch(self, epoch: int | None) -> datetime | None:
+        """Parse RemoteOK epoch timestamp to datetime."""
+        if not epoch:
             return None
 
         try:
-            return datetime.fromtimestamp(timestamp)
+            return datetime.fromtimestamp(epoch)
         except (ValueError, TypeError, OSError):
-            logger.warning("timestamp_parse_failed", timestamp=timestamp)
+            logger.warning("epoch_parse_failed", epoch=epoch)
             return None
 
 

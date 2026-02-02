@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Job APIs
     ADZUNA_APP_ID: str
     ADZUNA_API_KEY: str
+    ADZUNA_COUNTRY: str = "ca"
     REMOTEOK_API_URL: str
 
     # LLM

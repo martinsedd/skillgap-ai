@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 class AdzunaAdapter(JobSourcePort):
     BASE_URL = "https://api.adzuna.com/v1/api/jobs"
 
-    def __init__(self, app_id: str, api_key: str, country: str = "us"):
+    def __init__(self, app_id: str, api_key: str, country: str = "ca"):
         self.app_id = app_id
         self.api_key = api_key
         self.country = country
@@ -116,5 +116,5 @@ class AdzunaAdapter(JobSourcePort):
             return None
 
 
-def create_adzuna_adapter(app_id: str, api_key: str, country: str = "us") -> AdzunaAdapter:
+def create_adzuna_adapter(app_id: str, api_key: str, country: str = "ca") -> AdzunaAdapter:
     return AdzunaAdapter(app_id=app_id, api_key=api_key, country=country)

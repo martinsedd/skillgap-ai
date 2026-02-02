@@ -85,7 +85,11 @@ def get_vector_db() -> VectorDBPort:
 
 
 def get_adzuna_adapter() -> JobSourcePort:
-    return create_adzuna_adapter(app_id=settings.ADZUNA_APP_ID, api_key=settings.ADZUNA_API_KEY)
+    return create_adzuna_adapter(
+        app_id=settings.ADZUNA_APP_ID,
+        api_key=settings.ADZUNA_API_KEY,
+        country=settings.ADZUNA_COUNTRY,
+    )
 
 
 def get_remoteok_adapter() -> JobSourcePort:
