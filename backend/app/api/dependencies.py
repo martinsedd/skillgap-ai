@@ -16,6 +16,7 @@ from app.domain.ports.job_source_port import JobSourcePort
 from app.domain.ports.llm_port import LLMPort
 from app.domain.ports.repositories import JobRepository, ResumeRepository
 from app.domain.ports.vector_db_port import VectorDBPort
+from app.domain.services.interview_service import InterviewService
 from app.domain.services.job_matching_service import JobMatchingService
 from app.domain.services.job_service import JobService
 from app.domain.services.resume_service import ResumeService
@@ -154,4 +155,19 @@ def get_job_service(
         embedding_service=embedding_service,
         vector_db=vector_db,
         skill_extraction_service=skill_extraction_service,
+    )
+
+
+def get_interview_service(
+    llm_service: LLMPort = Depends(get_llm_service),
+    skill_extraction_service: SkillExtractionService = Depends(get_skill_extraction_service),
+    job_repo: JobRepository = Depends(get_job_repository),
+    resume_repo: ResumeRepository = Depends(get_resume_repository),
+) -> InterviewService:
+    return InterviewService(
+        llm_service=llm_service,
+        skill_extraction_service=skill_extraction_service,
+        job_repository=job_repo,
+        resume_repository=resume_repo,
+        total_questions=5,
     )

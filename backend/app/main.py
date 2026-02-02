@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.middleware import LoggingMiddleware
-from app.api.routes import jobs, resume
+from app.api.routes import interview, jobs, resume
 from app.core.config import settings
 from app.infrastructure.logging import get_logger, setup_logging
 from app.infrastructure.scheduler.scheduler import shutdown_scheduler, start_scheduler
@@ -52,6 +52,7 @@ async def lifespan(app):
 # INFO: Register routes
 app.include_router(resume.router)
 app.include_router(jobs.router)
+app.include_router(interview.router)
 
 
 # INFO: Health check
