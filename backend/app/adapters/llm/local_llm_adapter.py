@@ -94,7 +94,39 @@ class LocalLLMAdapter(LLMPort):
         difficulty: str,
         previous_question: list[str],
     ) -> str:
-        raise NotImplementedError("Interview questions coming in Phase 3")
+        logger.info("generating_interview_question", topic=topic, difficulty=difficulty)
+
+        prompt = self._build_interview_question_prompt(
+            job_description, topic, difficulty, previous_question
+        )
+
+        try:
+            response_text = self._generate(prompt, temperature=0.7, max_tokens=300)
+            question = self._extract_question(response_text)
+            logger.info("interview_question_generated", topic=topic)
+            return question
+        except Exception as e:
+            logger.error("interview_question_generation_faiuled", error=str(e), exc_info=True)
+            raise
+
+    def evaluate_interview_answer(
+        self,
+        question: str,
+        answer: str,
+        topic: str,
+    ) -> dict:
+        logger.info("evaluating_interview_answer", topic=topic)
+
+        prompt = self._build_answer_evaluation_prompt(question, answer, topic)
+
+        try:
+            response_text = self._generate(prompt, max_tokens=400)
+            evaluation = self._parse_answer_evaluation(response_text)
+            logger.info("answer_evaluated", score=evaluation["score"])
+            return evaluation
+        except Exception as e:
+            logger.error("answer_evaluation_failed", error=str(e), exc_info=True)
+            raise
 
     def _generate(self, prompt: str, temperature: float = 0.3, max_tokens: int = 800) -> str:
         """Make HTTP request to local LLM service."""
@@ -190,6 +222,59 @@ class LocalLLMAdapter(LLMPort):
 
         JSON:"""
 
+    def _build_interview_question_prompt(
+        self,
+        job_description: str,
+        topic: str,
+        difficulty: str,
+        previous_questions: list[str],
+    ) -> str:
+        prev_q_text = (
+            "\n".join([f"- {q}" for q in previous_questions]) if previous_questions else "None"
+        )
+
+        return f"""Generate a technical interview question for this job. Return ONLY the
+        question text, no additional commentary.
+
+        Job Description:
+        {job_description[:1000]}
+
+        Topic: {topic}
+        Difficulty: {difficulty}
+        Previous Questions Asked:
+        {prev_q_text}
+
+        Generate a {difficulty} question about {topic}. Make it specific and technical.
+        Avoid duplicating previous questions.
+
+        Question:"""
+
+    def _build_answer_evaluation_prompt(self, question: str, answer: str, topic: str) -> str:
+        return f"""Evaluate this interview answer. Return ONLY valid JSON with no
+        additional text.
+
+        Question: {question}
+        Topic: {topic}
+
+        Candidate's Answer:
+        {answer}
+
+        Evaluate the answer on:
+        - Technical accuracy
+        - Completeness
+        - Clarity of explanation
+        - Depth of understanding
+
+        Return JSON in this exact format:
+        {{
+            "score": 7,
+            "feedback": "Brief constructive feedback (2-3 sentences)"
+        }}
+
+        Score scale: 0-10(0=completely wrong, 5=partially correct, 10=excellent)
+
+        JSON:"""
+
     def _parse_resume_skills_response(self, response: str) -> SkillExtractionResult:
         try:
             json_str = self._extract_json(response)
@@ -256,6 +341,36 @@ class LocalLLMAdapter(LLMPort):
             raise LLMParseError("No JSON object found in response")
 
         return text[start:end]
+
+    def _extract_question(self, text: str) -> str:
+        text = text.strip()
+
+        if text.lower().startswith("question:"):
+            text = text[9:].strip()
+
+        lines = text.split("\n")
+        question = lines[0].strip()
+
+        return question
+
+    def _parse_answer_evaluation(self, response: str) -> dict:
+        try:
+            json_str = self._extract_json(response)
+            data = json.loads(json_str)
+
+            score = int(data.get("score", 0))
+            score = max(0, min(10, score))  # INFO: Clamp to 0-10
+
+            return {
+                "score": score,
+                "feedback": data.get("feedback", "No feedback provided."),
+            }
+        except (json.JSONDecodeError, ValueError):
+            logger.error("evaluation_parse_failed", response=response[:200])
+            return {
+                "score": 5,
+                "feedback": "Unable to evaluate answer properly. Please try again.",
+            }
 
 
 def create_local_llm_adapter(endpoint: str | None = None, timeout: int = 60) -> LocalLLMAdapter:
