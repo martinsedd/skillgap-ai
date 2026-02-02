@@ -7,6 +7,7 @@ from app.api.dependencies import (
     get_remoteok_adapter,
 )
 from app.api.schemas import (
+    GapAnalysisResponse,
     JobDetail,
     JobMatchResult,
     JobRefreshRequest,
@@ -14,6 +15,7 @@ from app.api.schemas import (
     JobSearchResponse,
     JobSkills,
     JobWithSkills,
+    SkillGapDetail,
 )
 from app.domain.model.job import Job
 from app.domain.ports.job_source_port import JobSourcePort
@@ -94,6 +96,42 @@ async def refresh_jobs(
         sources=[source.get_source_name() for source in sources],
         message=f"Job refresh started for {len(sources)} sources",
     )
+
+
+@router.get("/{job_id}/gap-analysis", response_model=GapAnalysisResponse)
+async def get_gap_analysis(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+    job_service: JobService = Depends(get_job_service),
+):
+    logger.info("gap_analysis_request", user_id=user_id, job_id=job_id)
+
+    try:
+        gap_result = job_service.get_gap_analysis(user_id, job_id)
+        job = job_service.get_job_by_id(job_id)
+
+        return GapAnalysisResponse(
+            job_id=job.id,
+            job_title=job.title,
+            matching_skills=gap_result.matching_skills,
+            missing_skills=[
+                SkillGapDetail(
+                    skill=gap.skill,
+                    category=gap.category,
+                    importance=gap.importance,
+                    recommendation=gap.recommendation,
+                )
+                for gap in gap_result.missing_skills
+            ],
+            overall_match_score=gap_result.overall_match_score,
+            summary=gap_result.summary,
+            recommendations=gap_result.recommendations,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("gap_analysis_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
 
 
 def _to_job_detail(job: Job) -> JobDetail:

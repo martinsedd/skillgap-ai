@@ -82,3 +82,20 @@ class JobRefreshResponse(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     error_type: str | None = None
+
+
+class SkillGapDetail(BaseModel):
+    skill: str
+    category: str = Field(..., description="missing, weak, or strong")
+    importance: str = Field(..., description="critical, important, or nice_to_have")
+    recommendation: str
+
+
+class GapAnalysisResponse(BaseModel):
+    job_id: str
+    job_title: str
+    matching_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[SkillGapDetail] = Field(default_factory=list)
+    overall_match_score: float = Field(..., ge=0.0, le=1.0)
+    summary: str
+    recommendations: list[str] = Field(default_factory=list)
