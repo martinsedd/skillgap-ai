@@ -82,3 +82,77 @@ class JobRefreshResponse(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     error_type: str | None = None
+
+
+class SkillGapDetail(BaseModel):
+    skill: str
+    category: str = Field(..., description="missing, weak, or strong")
+    importance: str = Field(..., description="critical, important, or nice_to_have")
+    recommendation: str
+
+
+class GapAnalysisResponse(BaseModel):
+    job_id: str
+    job_title: str
+    matching_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[SkillGapDetail] = Field(default_factory=list)
+    overall_match_score: float = Field(..., ge=0.0, le=1.0)
+    summary: str
+    recommendations: list[str] = Field(default_factory=list)
+
+
+class InterviewStartRequest(BaseModel):
+    job_id: str = Field(..., description="Job ID to interview for")
+
+
+class QuestionDetail(BaseModel):
+    text: str
+    topic: str
+    difficulty: str
+
+
+class InterviewStartResponse(BaseModel):
+    session_id: str
+    job_id: str
+    job_title: str
+    first_question: QuestionDetail
+    total_questions: int
+
+
+class SubmitAnswerRequest(BaseModel):
+    answer_text: str = Field(..., min_length=10, description="Answer to current question")
+
+
+class SubmitAnswerResponse(BaseModel):
+    session_id: str
+    question_number: int
+    next_question: QuestionDetail | None
+    is_completed: bool
+
+
+class QuestionAndAnswer(BaseModel):
+    question_number: int
+    topic: int
+    difficulty: str
+    question: str
+    answer: str
+    score: int = Field(..., ge=0, le=10)
+    feedback: str
+
+
+class InterviewFeedbackResponse(BaseModel):
+    session_id: str
+    job_id: str
+    overall_score: float = Field(..., ge=0.0, le=1.0)
+    final_feedback: str
+    questions_and_answers: list[QuestionAndAnswer]
+    completed_at: datetime
+
+
+class InterviewSessionResponse(BaseModel):
+    session_id: str
+    job_id: str
+    status: str
+    current_question_index: int
+    total_questions: int
+    is_completed: bool
