@@ -1,0 +1,8 @@
+.env
+*.gguf
+models/
+__pycache__/
+.venv/
+.python-version
+*.pyc
+.uv/

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Job APIs
     ADZUNA_APP_ID: str
     ADZUNA_API_KEY: str
+    ADZUNA_COUNTRY: str = "ca"
     REMOTEOK_API_URL: str
 
     # LLM
@@ -34,5 +35,8 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # AWS
+    AWS_REGION: str = "ca-central-1"
 
-settings = Settings()
+
+settings = Settings()  # type: ignore[call-arg]
