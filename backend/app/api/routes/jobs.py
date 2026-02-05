@@ -134,6 +134,26 @@ async def get_gap_analysis(
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
 
 
+@router.get("/{job_id}/skills", response_model=JobSkills)
+async def get_job_skills(
+    job_id: str,
+    job_service: JobService = Depends(get_job_service),
+):
+    logger.info("job_skills_request", job_id=job_id)
+
+    try:
+        job = job_service.get_job_by_id(job_id)
+
+        if not job.has_extracted_skills():
+            raise HTTPException(
+                status_code=404,
+                detail="Skills not yet extracted for this job.Try refreshing jobs.",
+            )
+        return _extract_skills(job)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 def _to_job_detail(job: Job) -> JobDetail:
     return JobDetail(
         id=job.id,

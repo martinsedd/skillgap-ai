@@ -1,3 +1,9 @@
 output "bucket_name" {
-  value = aws_s3_bucket.portfolio.id
+  description = "S3 bucket name"
+  value = aws_s3_bucket.resumes.id
+}
+
+output "bucket_arn" {
+  description = "S3 bucket ARN"
+  value = aws_s3_bucket.resumes.arn
 }
