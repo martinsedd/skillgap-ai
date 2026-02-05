@@ -1,0 +1,6 @@
+aws_region = "us-east-1"
+project_name = "skillgap"
+environment = "prod"
+instance_type = "t2.micro"
+ssh_key_name = "your-key-name" # Create in AWS console first
+allowed_ssh_cirds = "YOUR.IP.ADDRESS/32"

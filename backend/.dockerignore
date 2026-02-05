@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Tests
+tests/
+*.pytest_cache/
+
+# Development
+.git/
+.gitignore
+README.md
+*.md
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite
