@@ -54,8 +54,8 @@ functional, with the final focus on infrastructure automation and the frontend i
 
 | Module              | Status      | Technical Notes                                      |
 | :------------------ | :---------- | :--------------------------------------------------- |
-| **Domain Logic **   | Complete    | Hexagonal core, repositories, and matching services  |
-| **AI Integration ** | Complete    | LangGraph state machine & Local LLM tunneling        |
+| **Domain Logic**   | Complete    | Hexagonal core, repositories, and matching services  |
+| **AI Integration** | Complete    | LangGraph state machine & Local LLM tunneling        |
 | **Backend API**     | Complete    | FastAPI endpoints, JSON logging, & deduplication     |
 | **Infrastructure**  | In Progress | Migrating local Compose to Terraform/AWS (Debugging) |
 | **Frontend UI**     | Pending     | React + shadcn/ui demo dashboard implementation      |
