@@ -1,32 +1,30 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: skillgap-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: skillgap
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d skillgap"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - skillgap-network
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: skillgap-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: skillgap
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d skillgap"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - skillgap-network
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: 856191759941.dkr.ecr.us-east-1.amazonaws.com/skillgap/backend:latest
     container_name: skillgap-backend
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/skillgap
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@{DB_HOST}:5432/skillgap
       PINECONE_API_KEY: ${PINECONE_API_KEY}
       PINECONE_INDEX_NAME: ${PINECONE_INDEX_NAME}
       PINECONE_ENVIRONMENT: ${PINECONE_ENVIRONMENT}
@@ -42,9 +40,6 @@ services:
       STORAGE_PROVIDER: ${STORAGE_PROVIDER}
       AWS_REGION: ${AWS_REGION}
       LOG_LEVEL: ${LOG_LEVEL}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -69,10 +64,6 @@ services:
       - backend
     networks:
       - skillgap-network
-
-volumes:
-  postgres_data:
-    driver: local
 
 networks:
   skillgap-network:
