@@ -128,7 +128,7 @@ resource "aws_iam_role_policy" "ssm_db_access" {
           "ssm:GetParameter",
           "ssm:GetParameters"
         ]
-        Resource = "arn:aws:ssm:*:*parameter/${var.project_name}/${var.environment}/database/*"
+        Resource = "arn:aws:ssm:*:*:parameter/${var.project_name}/${var.environment}/database/*"
       }
     ]
   })

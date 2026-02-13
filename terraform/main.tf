@@ -41,6 +41,12 @@ data "aws_subnets" "default" {
   }
 }
 
+data "aws_subnet" "app_az" {
+  availability_zone = "us-east-1a"
+  default_for_az    = true
+  vpc_id            = data.aws_vpc.default.id
+}
+
 module "security" {
   source = "./modules/security"
 
@@ -68,6 +74,7 @@ module "compute" {
   iam_instance_role  = module.security.ec2_instance_profile_name
   security_group_ids = [module.security.ec2_security_group_id]
   s3_bucket_name     = module.storage.bucket_name
+  subnet_id          = data.aws_subnet.app_az.id
 }
 
 module "database" {
@@ -81,7 +88,7 @@ module "database" {
 
   db_instance_class       = var.db_instance_class
   db_allocated_storage    = var.db_allocated_storage
-  backup_retention_period = var.db_backup_retention
+  backup_retention_period = 0
   multi_az                = false
   deletion_protection     = true
   skip_final_snapshot     = false
