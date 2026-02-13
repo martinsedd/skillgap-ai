@@ -37,3 +37,8 @@ variable "subnet_id" {
   description = "Subnet ID for the EC2 instance"
   type        = string
 }
+
+variable "aws_account_id" {
+  description = "AWS account ID for ECR registry URL"
+  type        = string
+}

@@ -75,6 +75,7 @@ module "compute" {
   security_group_ids = [module.security.ec2_security_group_id]
   s3_bucket_name     = module.storage.bucket_name
   subnet_id          = data.aws_subnet.app_az.id
+  aws_account_id     = data.aws_caller_identity.current.account_id
 }
 
 module "database" {

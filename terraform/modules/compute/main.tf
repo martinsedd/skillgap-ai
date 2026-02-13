@@ -49,6 +49,7 @@ resource "aws_instance" "app" {
     s3_bucket_name = var.s3_bucket_name
     project_name   = var.project_name
     environment    = var.environment
+    aws_account_id = var.aws_account_id
   })
 
   tags = {
