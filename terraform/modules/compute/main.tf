@@ -1,14 +1,14 @@
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners = ["099720109477"] # Canonical
+  owners      = ["099720109477"] # Canonical
 
   filter {
-    name = "name"
+    name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
-    name = "virtualization-type"
+    name   = "virtualization-type"
     values = ["hvm"]
   }
 }
@@ -21,34 +21,35 @@ data "aws_vpc" "default" {
 # Get default subnets
 data "aws_subnets" "default" {
   filter {
-    name = "vpc-id"
+    name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
 }
 
 # EC2 Instance
 resource "aws_instance" "app" {
-  ami = data.aws_ami.ubuntu.id
+  ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
-  key_name = var.key_name
+  key_name      = var.key_name
 
   availability_zone = "us-east-1a"
 
   vpc_security_group_ids = var.security_group_ids
-  iam_instance_profile = var.iam_instance_role
+  iam_instance_profile   = var.iam_instance_role
 
-  subnet_id = tolist(data.aws_subnets.default.ids)[0]
+  subnet_id = var.subnet_id
 
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
-    encrypted = true
+    encrypted   = true
   }
 
   user_data = templatefile("${path.module}/user_data.sh", {
     s3_bucket_name = var.s3_bucket_name
-    project_name = var.project_name
-    environment = var.environment
+    project_name   = var.project_name
+    environment    = var.environment
+    aws_account_id = var.aws_account_id
   })
 
   tags = {
